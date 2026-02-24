@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🦞 YieldClaw – Live Agent Log</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; color: #e0e0e0; font-family: 'Courier New', monospace; }
+    header {
+      padding: 20px 32px;
+      border-bottom: 1px solid #1a1a2e;
+      display: flex; align-items: center; gap: 12px;
+    }
+    header h1 { font-size: 1.4rem; color: #00ffcc; }
+    header span { font-size: 0.85rem; color: #666; }
+    .stats-bar {
+      display: flex; gap: 32px; padding: 16px 32px;
+      background: #111; border-bottom: 1px solid #1a1a2e;
+      flex-wrap: wrap;
+    }
+    .stat { font-size: 0.8rem; }
+    .stat .val { color: #00ffcc; font-size: 1.1rem; font-weight: bold; display: block; }
+    .log-table { width: 100%; padding: 24px 32px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 700px; }
+    th { text-align: left; padding: 8px 12px; color: #666; border-bottom: 1px solid #1a1a2e; }
+    td { padding: 10px 12px; border-bottom: 1px solid #111; }
+    tr:hover td { background: #111; }
+    .STRONG { color: #00ff88; font-weight: bold; }
+    .MODERATE { color: #ffcc00; }
+    .SKIP { color: #555; }
+    .risk-LOW { color: #00ff88; }
+    .risk-MEDIUM { color: #ffcc00; }
+    .risk-HIGH { color: #ff4444; }
+    .disclaimer {
+      padding: 16px 32px; font-size: 0.72rem; color: #444;
+      border-top: 1px solid #1a1a2e; margin-top: 32px; line-height: 1.6;
+    }
+    .disclaimer a { color: #00ffcc; text-decoration: none; }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #00ff88; display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .empty-state { color: #444; text-align: center; padding: 48px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="live-dot"></div>
+  <h1>🦞 YieldClaw Agent Log</h1>
+  <span>Live Raydium scans · Grok 4.1 Fast analysis · Updates every 4 min</span>
+</header>
+
+<div class="stats-bar">
+  <div class="stat">Total Scans<span class="val" id="totalScans">—</span></div>
+  <div class="stat">Alerts Fired<span class="val" id="totalAlerts">—</span></div>
+  <div class="stat">STRONG (24h)<span class="val" id="strongPicks">—</span></div>
+  <div class="stat">Last Scan<span class="val" id="lastScan">—</span></div>
+  <div class="stat">Pools Passing Filter<span class="val" id="poolCount">—</span></div>
+</div>
+
+<div class="log-table">
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp (UTC)</th>
+        <th>Pool</th>
+        <th>APY</th>
+        <th>TVL</th>
+        <th>IL Risk</th>
+        <th>Verdict</th>
+        <th>Reason</th>
+      </tr>
+    </thead>
+    <tbody id="logBody">
+      <tr><td colspan="7" class="empty-state">Waiting for first scan... Check back in a few minutes.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="disclaimer">
+  ⚠️ <strong>YieldClaw is an informational tool only.</strong>
+  All outputs are AI-generated (Grok 4.1 Fast) and for educational purposes only.
+  Not financial advice. DeFi carries significant risk including total loss of principal.
+  This is an independent community project — not affiliated with OpenClaw, xAI, Raydium, or any protocol.
+  <br><br>
+  <a href="https://github.com/aibuilder212/yieldclaw" target="_blank">GitHub</a> ·
+  <a href="https://github.com/aibuilder212/yieldclaw/blob/main/docs/DISCLAIMER.md" target="_blank">Full Disclaimer</a> ·
+  MIT License · Fork it, own it.
+</div>
+
+<script>
+async function loadLogs() {
+  try {
+    const res = await fetch('/api/logs');
+    if (!res.ok) throw new Error('API not ready');
+    const data = await res.json();
+
+    document.getElementById('totalScans').textContent = data.stats?.totalScans ?? '—';
+    document.getElementById('totalAlerts').textContent = data.stats?.totalAlerts ?? '—';
+    document.getElementById('strongPicks').textContent = data.stats?.strongPicks24h ?? '—';
+    document.getElementById('lastScan').textContent = data.stats?.lastScan
+      ? new Date(data.stats.lastScan).toLocaleTimeString()
+      : '—';
+    document.getElementById('poolCount').textContent = data.logs?.length ?? '—';
+
+    const tbody = document.getElementById('logBody');
+    if (!data.logs || data.logs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No scans yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.logs.slice(0, 100).map(log => `
+      <tr>
+        <td>${new Date(log.timestamp).toISOString().replace('T',' ').slice(0,19)}</td>
+        <td><strong>${log.pool || log.token_a + '/' + log.token_b}</strong></td>
+        <td>${log.apy}%</td>
+        <td>$${Number(log.tvl).toLocaleString()}</td>
+        <td class="risk-${log.il_risk}">${log.il_risk}</td>
+        <td class="${log.verdict}">${log.verdict}</td>
+        <td style="color:#999;font-size:0.78rem">${log.reason || ''}</td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    // API not ready yet, silently wait
+  }
+}
+
+loadLogs();
+setInterval(loadLogs, 60000);
+</script>
+</body>
+</html>
